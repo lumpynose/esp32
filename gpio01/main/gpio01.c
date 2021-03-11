@@ -18,6 +18,9 @@
 
 #include "driver/gpio.h"
 
+# define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+# include "esp_log.h"
+
 /**
  * Brief: This test code shows how to configure gpio and how to use
  * gpio interrupt.
@@ -27,13 +30,15 @@
  * GPIO13: input, pulled up, interrupt from rising edge and falling edge
  */
 
-#define GPIO_OUTPUT_IO          GPIO_NUM_2
-#define GPIO_OUTPUT_PIN_SEL     (1ULL<<GPIO_OUTPUT_IO)
+# define GPIO_OUTPUT_IO          GPIO_NUM_2
+# define GPIO_OUTPUT_PIN_SEL     (1ULL<<GPIO_OUTPUT_IO)
 
-#define GPIO_INPUT_IO           GPIO_NUM_13
-#define GPIO_INPUT_PIN_SEL      (1ULL<<GPIO_INPUT_IO)
+# define GPIO_INPUT_IO           GPIO_NUM_13
+# define GPIO_INPUT_PIN_SEL      (1ULL<<GPIO_INPUT_IO)
 
-#define ESP_INTR_FLAG_DEFAULT   0
+# define ESP_INTR_FLAG_DEFAULT   0
+
+static const char *log_tag =	"main";
 
 static xQueueHandle gpio_evt_queue = NULL;
 
@@ -50,7 +55,7 @@ static void gpio_task_example(void* arg) {
 
     for (;;) {
         if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            printf("GPIO[%d] intr, val: %d\n",
+            ESP_LOGI(log_tag, "GPIO[%d] intr, val: %d\n",
                 io_num, gpio_get_level(io_num));
      
             // button released sets level to 1
@@ -63,7 +68,7 @@ static void gpio_task_example(void* arg) {
                     level = !level;
                     gpio_set_level(GPIO_OUTPUT_IO, level);
 
-                    printf("level: %d\n", level);
+                    ESP_LOGI(log_tag, "level: %d\n", level);
                 }
 
                 previous = now;
@@ -125,7 +130,7 @@ void app_main(void) {
     gpio_set_level(GPIO_OUTPUT_IO, 0);
 
     for (int cnt = 0; /**/; cnt++) {
-        printf("cnt: %d\n", cnt);
+        ESP_LOGI(log_tag, "cnt: %d\n", cnt);
         vTaskDelay(1000 / portTICK_RATE_MS);
     }
 }

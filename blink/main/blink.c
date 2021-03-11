@@ -12,18 +12,26 @@
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 
-/* Can use project configuration menu (idf.py menuconfig) to choose the GPIO to blink,
-   or you can edit the following line and set a number here.
-*/
+# define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+# include "esp_log.h"
+
+/*
+ * Can use project configuration menu (idf.py menuconfig) to choose
+ * the GPIO to blink, or you can edit the following line and set a
+ * number here.
+ */
 #define BLINK_GPIO 2    /* CONFIG_BLINK_GPIO */
 
+static const char *log_tag = "blink";
+
 void app_main(void) {
-    /* Configure the IOMUX register for pad BLINK_GPIO (some pads are
-       muxed to GPIO on reset already, but some default to other
-       functions and need to be switched to GPIO. Consult the
-       Technical Reference for a list of pads and their default
-       functions.)
-    */
+    /*
+     * Configure the IOMUX register for pad BLINK_GPIO (some pads are
+     * muxed to GPIO on reset already, but some default to other
+     * functions and need to be switched to GPIO. Consult the
+     * Technical Reference for a list of pads and their default
+     * functions.)
+     */
     gpio_pad_select_gpio(BLINK_GPIO);
     
     /* Set the GPIO as a push/pull output */
@@ -31,12 +39,12 @@ void app_main(void) {
 
     for (;;) {
         /* Blink off (output low) */
-        printf("Turning off the LED\n");
+        ESP_LOGI(log_tag, "Turning off the LED\n");
         gpio_set_level(BLINK_GPIO, 0);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
 
         /* Blink on (output high) */
-        printf("Turning on the LED\n");
+        ESP_LOGI(log_tag, "Turning on the LED\n");
         gpio_set_level(BLINK_GPIO, 1);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }

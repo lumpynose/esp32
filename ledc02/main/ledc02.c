@@ -11,11 +11,13 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/queue.h"
 #include "driver/ledc.h"
 #include "esp_err.h"
 
 # define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 # include "esp_log.h"
+
 /*
  * About this example
  *
@@ -70,7 +72,7 @@
  */
 # define PWM_FREQ_HZ		5000
 
-static const char *log_tag =	"ledc";
+static const char		*log_tag = "ledc02";
 
 /*
  * Prepare and set configuration of timers that will be used by
@@ -116,11 +118,29 @@ void config_timers() {
     }
 }
 
+static xQueueHandle ledc_evt_queue = NULL;
+
+static void IRAM_ATTR ledc_isr_handler(void* arg) {
+    const uint32_t chan_num = (uint32_t) arg;
+
+    xQueueSendFromISR(ledc_evt_queue, &chan_num, NULL);
+}
+
+static void ledc_task_example(void* arg) {
+    uint32_t chan_num;
+
+    for (;;) {
+        if (xQueueReceive(ledc_evt_queue, &chan_num, portMAX_DELAY)) {
+            ESP_LOGI(log_tag, "LEDC[%d] intr\n", chan_num);
+	}
+    }
+}
+
 void app_main(void) {
     int ch;
 
     config_timers();
-    
+
     /*
      * Prepare individual configuration
      * for each channel of LED Controller
@@ -141,7 +161,8 @@ void app_main(void) {
 	 .gpio_num   = LEDC_HS_CH0_GPIO,
 	 .speed_mode = LEDC_HS_MODE,
 	 .hpoint     = 0,
-	 .timer_sel  = LEDC_HS_TIMER
+	 .timer_sel  = LEDC_HS_TIMER,
+	 .intr_type  = LEDC_INTR_FADE_END
         },
         {
 	 .channel    = LEDC_HS_CH1_CHANNEL,
@@ -149,7 +170,8 @@ void app_main(void) {
 	 .gpio_num   = LEDC_HS_CH1_GPIO,
 	 .speed_mode = LEDC_HS_MODE,
 	 .hpoint     = 0,
-	 .timer_sel  = LEDC_HS_TIMER
+	 .timer_sel  = LEDC_HS_TIMER,
+	 .intr_type  = LEDC_INTR_FADE_END
         },
         {
 	 .channel    = LEDC_LS_CH2_CHANNEL,
@@ -157,7 +179,8 @@ void app_main(void) {
 	 .gpio_num   = LEDC_LS_CH2_GPIO,
 	 .speed_mode = LEDC_LS_MODE,
 	 .hpoint     = 0,
-	 .timer_sel  = LEDC_LS_TIMER
+	 .timer_sel  = LEDC_LS_TIMER,
+	 .intr_type  = LEDC_INTR_FADE_END
         },
         {
 	 .channel    = LEDC_LS_CH3_CHANNEL,
@@ -165,7 +188,8 @@ void app_main(void) {
 	 .gpio_num   = LEDC_LS_CH3_GPIO,
 	 .speed_mode = LEDC_LS_MODE,
 	 .hpoint     = 0,
-	 .timer_sel  = LEDC_LS_TIMER
+	 .timer_sel  = LEDC_LS_TIMER,
+	 .intr_type  = LEDC_INTR_FADE_END
         },
     };
 
@@ -173,6 +197,23 @@ void app_main(void) {
     for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
         if (ledc_channel_config(&ledc_channel[ch]) != ESP_OK) {
 	    ESP_LOGE(log_tag, "ledc_channel_config failed, ch: %d\n", ch);
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+	}
+    }
+
+    // create a queue to handle gpio event from isr
+    if ((ledc_evt_queue = xQueueCreate(10, sizeof(uint32_t))) == 0) {
+	    ESP_LOGE(log_tag, "ledc queue create failed\n");
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+    }
+
+    // start ledc task
+    xTaskCreate(ledc_task_example, "ledc_task_example", 2048, NULL, 10, NULL);
+
+    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
+	if (ledc_isr_register(&ledc_isr_handler, (void*) ledc_channel[ch].channel,
+                ESP_INTR_FLAG_IRAM, NULL) != ESP_OK) {
+	    ESP_LOGE(log_tag, "ledc isr register failed, ch: %d\n", ch);
 	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
 	}
     }
