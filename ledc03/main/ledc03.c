@@ -97,22 +97,6 @@ void config_timers() {
 	ESP_LOGE(log_tag, "high speed timer config failed\n");
 	vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
     }
-
-    // Set configuration of timer1 for low speed channels
-    const ledc_timer_config_t ledc_timer_ls = {
-        // resolution of PWM duty
-	.duty_resolution = DUTY_RESOLUTION,
-	// frequency of PWM signal
-        .freq_hz = PWM_FREQ_HZ,
-	// timer mode
-        .speed_mode = LEDC_LS_MODE,
-	// timer index
-        .timer_num = LEDC_LS_TIMER,
-	// Auto select the source clock
-        .clk_cfg = LEDC_AUTO_CLK
-    };
-    
-    ESP_ERROR_CHECK_WITHOUT_ABORT( ledc_timer_config(&ledc_timer_ls) );
 }
 
 static xQueueHandle ledc_evt_queue = NULL;
@@ -128,16 +112,14 @@ static void ledc_task(void *arg) {
     BaseType_t xTaskWokenByReceive = pdFALSE;
 
     for (;;) {
-        if (xQueueReceive(ledc_evt_queue, (void *) &chan_num, &xTaskWokenByReceive)) {
-	    ESP_LOGI(log_tag, "waiting: %d\n", uxQueueMessagesWaiting(ledc_evt_queue));
-	    ESP_LOGI(log_tag, "LEDC[%d] intr\n", chan_num);
+	if (xQueueReceive(ledc_evt_queue, (void *) &chan_num, &xTaskWokenByReceive)) {
+	    /*ESP_LOGI(log_tag, "waiting: %d\n", uxQueueMessagesWaiting(ledc_evt_queue));*/
+	    printf("LEDC[%d] intr\n", chan_num);
 	}
     }
 }
 
 void app_main(void) {
-    int ch;
-
     config_timers();
 
     /*
@@ -153,8 +135,7 @@ void app_main(void) {
      *         then frequency and bit_num of these channels
      *         will be the same
      */
-    ledc_channel_config_t ledc_channel[LEDC_TEST_CH_NUM] = {
-        {
+    ledc_channel_config_t ledc_channel = {
 	 .channel    = LEDC_HS_CH0_CHANNEL,
 	 .duty       = 0,
 	 .gpio_num   = LEDC_HS_CH0_GPIO,
@@ -162,40 +143,10 @@ void app_main(void) {
 	 .hpoint     = 0,
 	 .timer_sel  = LEDC_HS_TIMER,
 	 .intr_type  = LEDC_INTR_FADE_END,
-        },
-        {
-	 .channel    = LEDC_HS_CH1_CHANNEL,
-	 .duty       = 0,
-	 .gpio_num   = LEDC_HS_CH1_GPIO,
-	 .speed_mode = LEDC_HS_MODE,
-	 .hpoint     = 0,
-	 .timer_sel  = LEDC_HS_TIMER,
-	 .intr_type  = LEDC_INTR_FADE_END,
-        },
-        {
-	 .channel    = LEDC_LS_CH2_CHANNEL,
-	 .duty       = 0,
-	 .gpio_num   = LEDC_LS_CH2_GPIO,
-	 .speed_mode = LEDC_LS_MODE,
-	 .hpoint     = 0,
-	 .timer_sel  = LEDC_LS_TIMER,
-	 .intr_type  = LEDC_INTR_FADE_END,
-        },
-        {
-	 .channel    = LEDC_LS_CH3_CHANNEL,
-	 .duty       = 0,
-	 .gpio_num   = LEDC_LS_CH3_GPIO,
-	 .speed_mode = LEDC_LS_MODE,
-	 .hpoint     = 0,
-	 .timer_sel  = LEDC_LS_TIMER,
-	 .intr_type  = LEDC_INTR_FADE_END,
-        },
     };
 
     // Set LED Controller with previously prepared configuration
-    for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-        ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_channel_config(&ledc_channel[ch]));
-    }
+    ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_channel_config(&ledc_channel));
 
     // create a queue to handle gpio event from isr
     if ((ledc_evt_queue = xQueueCreate(10, sizeof(uint32_t))) == 0) {
@@ -212,75 +163,65 @@ void app_main(void) {
     for (;;) {
         ESP_LOGI(log_tag, "1. LEDC fade up to duty = %d\n", LEDC_TEST_DUTY);
 
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel,
-                    LEDC_TEST_DUTY,
-                    LEDC_TEST_FADE_TIME));
+	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel.speed_mode,
+                ledc_channel.channel,
+                LEDC_TEST_DUTY,
+                LEDC_TEST_FADE_TIME));
 	    
-            ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel,
-                    LEDC_FADE_NO_WAIT) );
+	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel.speed_mode,
+                ledc_channel.channel,
+                LEDC_FADE_NO_WAIT) );
 
-	    ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel[ch].channel,
+	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel.channel,
                 ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED /*ESP_INTR_FLAG_LEVELMASK*/, NULL) );
-        }
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
 
         ESP_LOGI(log_tag, "2. LEDC fade down to duty = 0\n");
 
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel[ch].speed_mode,
-	            ledc_channel[ch].channel,
-		    0,
-		    LEDC_TEST_FADE_TIME) );
+	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel.speed_mode,
+                ledc_channel.channel,
+		0,
+		LEDC_TEST_FADE_TIME) );
 	    
-            ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel[ch].speed_mode,
-                    ledc_channel[ch].channel,
-                    LEDC_FADE_NO_WAIT) );
-        }
+	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel.speed_mode,
+                ledc_channel.channel,
+                LEDC_FADE_NO_WAIT) );
 
         vTaskDelay(DELAY /  portTICK_PERIOD_MS);
 
-# ifdef notdef
         ESP_LOGI(log_tag, "3. LEDC set duty = %d without fade\n", LEDC_TEST_DUTY);
 
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            if (ledc_set_duty(ledc_channel[ch].speed_mode,
-			      ledc_channel[ch].channel,
-			      LEDC_TEST_DUTY) != ESP_OK) {
-		ESP_LOGE(log_tag, "ledc set duty failed, ch: %d\n", ch);
-		vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
-	    }
+	if (ledc_set_duty(ledc_channel.speed_mode,
+                ledc_channel.channel,
+		LEDC_TEST_DUTY) != ESP_OK) {
+	    ESP_LOGE(log_tag, "ledc set duty failed\n");
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+	}
 	    
-            if (ledc_update_duty(ledc_channel[ch].speed_mode,
-				 ledc_channel[ch].channel) != ESP_OK) {
-		ESP_LOGE(log_tag, "ledc update duty failed, ch: %d\n", ch);
-		vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
-	    }
-        }
+	if (ledc_update_duty(ledc_channel.speed_mode,
+		ledc_channel.channel) != ESP_OK) {
+	    ESP_LOGE(log_tag, "ledc update duty failed\n");
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+	}
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
 
         ESP_LOGI(log_tag, "4. LEDC set duty = 0 without fade\n");
 
-        for (ch = 0; ch < LEDC_TEST_CH_NUM; ch++) {
-            if (ledc_set_duty(ledc_channel[ch].speed_mode,
-			      ledc_channel[ch].channel,
-			      0) != ESP_OK) {
-		ESP_LOGE(log_tag, "ledc set duty failed, ch: %d\n", ch);
-		vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
-	    }
+	if (ledc_set_duty(ledc_channel.speed_mode,
+                ledc_channel.channel,
+		0) != ESP_OK) {
+	    ESP_LOGE(log_tag, "ledc set duty failed\n");
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+	}
 	    
-            if (ledc_update_duty(ledc_channel[ch].speed_mode,
-				 ledc_channel[ch].channel) != ESP_OK) {
-		ESP_LOGE(log_tag, "ledc update duty failed, ch: %d\n", ch);
-		vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
-	    }
-        }
+	if (ledc_update_duty(ledc_channel.speed_mode,
+                ledc_channel.channel) != ESP_OK) {
+	    ESP_LOGE(log_tag, "ledc update duty failed\n");
+	    vTaskDelay(DELAY_ERROR / portTICK_PERIOD_MS);
+	}
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
-# endif
     }
 }
