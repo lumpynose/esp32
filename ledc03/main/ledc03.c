@@ -32,32 +32,19 @@
  *
  * 3. You can also set a target duty directly without fading.
  *
- * 4. This example uses GPIO18/19/4/5 as LEDC output,
+ * 4. This example uses GPIO18 as LEDC output,
  *    and it will change the duty repeatedly.
  *
  * 5. GPIO18/19 are from high speed channel group.
- *    GPIO4/5 are from low speed channel group.
  */
 # define LEDC_HS_TIMER          LEDC_TIMER_0
 # define LEDC_HS_MODE           LEDC_HIGH_SPEED_MODE
 
 # define LEDC_HS_CH0_GPIO       18
 # define LEDC_HS_CH0_CHANNEL    LEDC_CHANNEL_0
-# define LEDC_HS_CH1_GPIO       19
-# define LEDC_HS_CH1_CHANNEL    LEDC_CHANNEL_1
-
-# define LEDC_LS_TIMER          LEDC_TIMER_1
-# define LEDC_LS_MODE           LEDC_LOW_SPEED_MODE
-
-# define LEDC_LS_CH2_GPIO       4
-# define LEDC_LS_CH2_CHANNEL    LEDC_CHANNEL_2
-# define LEDC_LS_CH3_GPIO       5
-# define LEDC_LS_CH3_CHANNEL    LEDC_CHANNEL_3
-
-# define LEDC_TEST_CH_NUM       (4)
 
 /* final brightness */
-# define LEDC_TEST_DUTY         (4000)
+# define LEDC_TEST_DUTY         (6000) /* 4000 */
 
 # define DUTY_RESOLUTION	LEDC_TIMER_13_BIT
 
@@ -70,9 +57,11 @@
  * resolution of pulses; bigger = more finely divided.
  * around 30 and below produces flickering.
  */
-# define PWM_FREQ_HZ		5000
+# define PWM_FREQ_HZ		6000
 
-static const char		*log_tag = "ledc02";
+# define INTR_ALLOC_FLAGS	(ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED)
+
+static const char		*log_tag = "ledc";
 
 /*
  * Prepare and set configuration of timers that will be used by
@@ -99,22 +88,21 @@ void config_timers() {
     }
 }
 
+static uint32_t isr_count = 0;
 static xQueueHandle ledc_evt_queue = NULL;
 
 static void IRAM_ATTR ledc_isr_handler(void *arg) {
-    const uint32_t chan_num = (uint32_t) arg;
-
-    xQueueSend(ledc_evt_queue, &chan_num, NULL);
+    isr_count++;
+    xQueueSend(ledc_evt_queue, &isr_count, (TickType_t) NULL);
 }
 
 static void ledc_task(void *arg) {
-    uint32_t chan_num;
-    BaseType_t xTaskWokenByReceive = pdFALSE;
+    uint32_t isr_count;
+    TickType_t xTaskWokenByReceive = pdFALSE;
 
     for (;;) {
-	if (xQueueReceive(ledc_evt_queue, (void *) &chan_num, &xTaskWokenByReceive)) {
-	    /*ESP_LOGI(log_tag, "waiting: %d\n", uxQueueMessagesWaiting(ledc_evt_queue));*/
-	    printf("LEDC[%d] intr\n", chan_num);
+	if (xQueueReceive(ledc_evt_queue, &isr_count, (TickType_t) &xTaskWokenByReceive)) {
+	    ESP_LOGI(log_tag, "LEDC intr, isr_count: %d\n", isr_count);
 	}
     }
 }
@@ -146,7 +134,7 @@ void app_main(void) {
     };
 
     // Set LED Controller with previously prepared configuration
-    ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_channel_config(&ledc_channel));
+    ledc_channel_config(&ledc_channel);
 
     // create a queue to handle gpio event from isr
     if ((ledc_evt_queue = xQueueCreate(10, sizeof(uint32_t))) == 0) {
@@ -157,40 +145,44 @@ void app_main(void) {
     // start ledc task
     xTaskCreate(ledc_task, "ledc_task", 2048, NULL, 10, NULL);
 
-    // Initialize fade service.
-    ledc_fade_func_install(ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED);
+    // Initialize fade service; arg must mach 3rd arg of
+    // ledc_isr_register.
+    ledc_fade_func_install(INTR_ALLOC_FLAGS);
+
+    ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel.channel,
+            INTR_ALLOC_FLAGS, NULL);
 
     for (;;) {
         ESP_LOGI(log_tag, "1. LEDC fade up to duty = %d\n", LEDC_TEST_DUTY);
-
-	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel.speed_mode,
+	isr_count = 0;
+	
+	ledc_set_fade_with_time(ledc_channel.speed_mode,
                 ledc_channel.channel,
                 LEDC_TEST_DUTY,
-                LEDC_TEST_FADE_TIME));
+                LEDC_TEST_FADE_TIME);
 	    
-	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel.speed_mode,
+	ledc_fade_start(ledc_channel.speed_mode,
                 ledc_channel.channel,
-                LEDC_FADE_NO_WAIT) );
-
-	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel.channel,
-                ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED /*ESP_INTR_FLAG_LEVELMASK*/, NULL) );
+                LEDC_FADE_NO_WAIT);
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
 
         ESP_LOGI(log_tag, "2. LEDC fade down to duty = 0\n");
+	isr_count = 0;
 
-	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_set_fade_with_time(ledc_channel.speed_mode,
+	ledc_set_fade_with_time(ledc_channel.speed_mode,
                 ledc_channel.channel,
 		0,
-		LEDC_TEST_FADE_TIME) );
+		LEDC_TEST_FADE_TIME);
 	    
-	ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel.speed_mode,
+	ledc_fade_start(ledc_channel.speed_mode,
                 ledc_channel.channel,
-                LEDC_FADE_NO_WAIT) );
+                LEDC_FADE_NO_WAIT);
 
         vTaskDelay(DELAY /  portTICK_PERIOD_MS);
 
         ESP_LOGI(log_tag, "3. LEDC set duty = %d without fade\n", LEDC_TEST_DUTY);
+	isr_count = 0;
 
 	if (ledc_set_duty(ledc_channel.speed_mode,
                 ledc_channel.channel,
@@ -208,6 +200,7 @@ void app_main(void) {
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
 
         ESP_LOGI(log_tag, "4. LEDC set duty = 0 without fade\n");
+	isr_count = 0;
 
 	if (ledc_set_duty(ledc_channel.speed_mode,
                 ledc_channel.channel,
