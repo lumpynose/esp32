@@ -209,6 +209,9 @@ void app_main(void) {
     // Initialize fade service.
     ledc_fade_func_install(ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED);
 
+    ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel[ch].channel,
+            ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED, NULL) );
+
     for (;;) {
         ESP_LOGI(log_tag, "1. LEDC fade up to duty = %d\n", LEDC_TEST_DUTY);
 
@@ -221,9 +224,6 @@ void app_main(void) {
             ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_fade_start(ledc_channel[ch].speed_mode,
                     ledc_channel[ch].channel,
                     LEDC_FADE_NO_WAIT) );
-
-	    ESP_ERROR_CHECK_WITHOUT_ABORT (ledc_isr_register(&ledc_isr_handler, (void *) ledc_channel[ch].channel,
-                ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED /*ESP_INTR_FLAG_LEVELMASK*/, NULL) );
         }
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
