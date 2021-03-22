@@ -1,0 +1,5 @@
+# baud rates: 115200, 230400, 460800, 921600
+
+esptool.py --chip esp32 --port /dev/ttyUSB0 erase_flash
+
+esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 write_flash -z 0x1000 tinypico-idf3-20210202-v1.14.bin

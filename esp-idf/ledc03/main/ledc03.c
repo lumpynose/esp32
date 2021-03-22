@@ -44,7 +44,7 @@
 # define LEDC_HS_CH0_CHANNEL    LEDC_CHANNEL_0
 
 /* final brightness */
-# define LEDC_TEST_DUTY         (6000) /* 4000 */
+# define LEDC_TEST_DUTY         (2000) /* 4000 */
 
 # define DUTY_RESOLUTION	LEDC_TIMER_13_BIT
 
@@ -57,7 +57,7 @@
  * resolution of pulses; bigger = more finely divided.
  * around 30 and below produces flickering.
  */
-# define PWM_FREQ_HZ		6000
+# define PWM_FREQ_HZ		60
 
 # define INTR_ALLOC_FLAGS	(ESP_INTR_FLAG_IRAM|ESP_INTR_FLAG_SHARED)
 
@@ -181,6 +181,7 @@ void app_main(void) {
 
         vTaskDelay(DELAY /  portTICK_PERIOD_MS);
 
+# ifdef notdef
         ESP_LOGI(log_tag, "3. LEDC set duty = %d without fade\n", LEDC_TEST_DUTY);
 	isr_count = 0;
 
@@ -216,5 +217,6 @@ void app_main(void) {
 	}
 
         vTaskDelay(DELAY / portTICK_PERIOD_MS);
+# endif /* notdef */
     }
 }
