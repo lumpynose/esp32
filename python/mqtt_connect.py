@@ -11,7 +11,7 @@ def main(server = "192.168.1.7"):
 
     print("password:", passwd)
 
-    wificonnect = WifiConnect("The Pulsating Inconvenience", passwd);
+    wificonnect = WifiConnect("TPI 2.4g", passwd);
     wificonnect.connect()
     
     c = MQTTClient("umqtt_client", server, port = 1883, user = "tiny", password = passwd)
