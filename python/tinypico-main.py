@@ -11,15 +11,15 @@ spi = SoftSPI(sck=Pin( TinyPICO.DOTSTAR_CLK ), mosi=Pin( TinyPICO.DOTSTAR_DATA )
 dotstar = DotStar(spi, 1, brightness = 0.5 ) # Just one DotStar, half brightness
 
 # Turn on the power to the DotStar
-TinyPICO.dotstar_power( True )
+TinyPICO.set_dotstar_power( True )
 
 # Say hello
 print("\nHello from TinyPICO!")
 print("--------------------\n")
 
 # Show some info on boot 
-print("Battery Voltage is {}V".format( TinyPICO.battery_voltage() ) )
-print("Battery Charge State is {}\n".format( TinyPICO.battery_charging() ) )
+print("Battery Voltage is {}V".format( TinyPICO.get_battery_voltage() ) )
+print("Battery Charge State is {}\n".format( TinyPICO.get_battery_charging() ) )
 
 # Show available memory
 print("Memory Info - micropython.mem_info()")

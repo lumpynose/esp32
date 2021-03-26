@@ -1,4 +1,5 @@
 import network
+import machine
 
 class WifiConnect:
     def __init__(self, essid, password):
@@ -16,5 +17,8 @@ class WifiConnect:
 
             while not wlan.isconnected():
                 pass
+                #print(wlan.status())
 
         print('network config:', wlan.ifconfig())
+        print('MAC:', wlan.config('mac'))
+        print('machine id:',  machine.unique_id())
